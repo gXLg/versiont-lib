@@ -94,11 +94,14 @@ public class R {
     @SuppressWarnings("resource")
     public static <T extends RWrapper<?>> RClass extendWrapper(Class<T> superClass, Class<? extends T> extendingWrapper) {
         try {
-            Class<?> superClz = ((RClass) clz(superClass).fld("clazz", RClass.class).get()).self();
-            Class<?> intercept = superClass.getDeclaredClasses()[0];
-            return R.clz(new ByteBuddy().subclass(superClz).name(extendingWrapper.getName() + "Impl").defineField("__wrapper", extendingWrapper, Visibility.PUBLIC)
-                                        .method(ElementMatchers.isVirtual().and(ElementMatchers.not(ElementMatchers.isFinalizer()))).intercept(MethodDelegation.to(intercept)).make()
-                                        .load(superClz.getClassLoader(), ClassLoadingStrategy.Default.INJECTION).getLoaded());
+            return new RClass(() -> {
+                Class<?> superClz = ((RClass) clz(superClass).fld("clazz", RClass.class).get()).self();
+                Class<?> intercept = superClass.getDeclaredClasses()[0];
+                DynamicType.Unloaded<?> unloaded = new ByteBuddy().subclass(superClz).name(extendingWrapper.getName() + "Impl").defineField("__wrapper", extendingWrapper, Visibility.PUBLIC)
+                                                                  .method(ElementMatchers.isVirtual().and(ElementMatchers.not(ElementMatchers.isFinalizer()))).intercept(MethodDelegation.to(intercept))
+                                                                  .make();
+                return unloaded.load(superClz.getClassLoader(), ClassLoadingStrategy.Default.INJECTION).getLoaded();
+            });
         } catch (Exception e) {
             throw new RuntimeException("Failed to extend class", e);
         }
