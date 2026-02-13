@@ -1,4 +1,4 @@
-name: Publish on Modrinth
+name: Publish on Modrinth and Maven Repo
 
 on:
   release:
@@ -22,18 +22,21 @@ jobs:
       - name: Mark Executable
         run: chmod +x ./gradlew
 
-      - name: Build
+      - name: Build and Publish to Maven Repo
         uses: burrunan/gradle-cache-action@v3
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          arguments: build
+          arguments: build publish
 
-      - name: Update description
+      - name: Update Description on Modrinth
         uses: funnyboy-roks/modrinth-auto-desc@v1.5
         with:
           auth-token: ${{ secrets.MODRINTH_TOKEN }}
           slug: fPR7FdSl
 
-      - name: Publish files to Modrinth
+      - name: Publish to Modrinth
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           modrinth-id: fPR7FdSl
