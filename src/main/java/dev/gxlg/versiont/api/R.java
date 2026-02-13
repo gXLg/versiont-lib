@@ -1,32 +1,29 @@
 package dev.gxlg.versiont.api;
 
+import dev.gxlg.versiont.api.types.StoredField;
+import dev.gxlg.versiont.api.types.StoredMethod;
+import dev.gxlg.versiont.api.types.Wrapper;
 import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
 import net.bytebuddy.implementation.MethodDelegation;
-import net.bytebuddy.implementation.bind.annotation.AllArguments;
-import net.bytebuddy.implementation.bind.annotation.FieldValue;
-import net.bytebuddy.implementation.bind.annotation.Origin;
-import net.bytebuddy.implementation.bind.annotation.RuntimeType;
-import net.bytebuddy.implementation.bind.annotation.SuperCall;
 import net.bytebuddy.matcher.ElementMatchers;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.invoke.VarHandle;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
@@ -45,10 +42,6 @@ public class R {
     private static final Map<ClassLoader, Map<Integer, StoredField>> fieldsCache = Collections.synchronizedMap(new WeakHashMap<>());
 
     private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
-
-    private static final MethodType STATIC_METHOD_TYPE = MethodType.methodType(Object.class, Object[].class);
-
-    private static final MethodType METHOD_TYPE = MethodType.methodType(Object.class, Object.class, Object[].class);
 
     private static final MethodType CONSTRUCTOR_TYPE = MethodType.methodType(Object.class, Object[].class);
 
@@ -96,19 +89,20 @@ public class R {
     }
 
     @SuppressWarnings("resource")
-    public static <T extends RWrapper<?>> RClass extendWrapper(Class<T> superClass, Class<? extends T> extendingWrapper) {
-        try {
-            return new RClass(() -> {
+    public static <T extends Wrapper<?>> RClass extendWrapper(Class<T> superClass, Class<? extends T> extendingWrapper) {
+        R.clz(List.class).inst(clz(superClass).fld("userSubClazzes", List.class).get()).mthd("add", boolean.class, Object.class).invk(extendingWrapper);
+        return new RClass(() -> {
+            try {
                 Class<?> superClz = ((RClass) clz(superClass).fld("clazz", RClass.class).get()).self();
                 Class<?> intercept = superClass.getDeclaredClasses()[0];
                 DynamicType.Unloaded<?> unloaded = new ByteBuddy().subclass(superClz).name(extendingWrapper.getName() + "Impl").defineField("__wrapper", extendingWrapper, Visibility.PUBLIC)
                                                                   .method(ElementMatchers.isVirtual().and(ElementMatchers.not(ElementMatchers.isFinalizer()))).intercept(MethodDelegation.to(intercept))
                                                                   .make();
                 return unloaded.load(superClz.getClassLoader(), ClassLoadingStrategy.Default.INJECTION).getLoaded();
-            });
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to extend class", e);
-        }
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to extend class", e);
+            }
+        });
     }
 
     public static void preload(RClass... classes) {
@@ -120,112 +114,6 @@ public class R {
             }, Executors.newSingleThreadExecutor()
         );
     }
-
-    public interface StoredMethod {
-        Object invk(Object instance, Object[] args);
-
-        static StoredMethod of(int args, boolean isInstance, MethodHandle method) {
-            if (isInstance) {
-                return new Instance(args, method);
-            } else {
-                return new Static(args, method);
-            }
-        }
-
-        class Instance implements StoredMethod {
-            private final MethodHandle method;
-
-            private Instance(int args, MethodHandle method) {
-                this.method = method.asSpreader(Object[].class, args).asType(METHOD_TYPE);
-            }
-
-            @Override
-            public Object invk(Object instance, Object[] args) {
-                try {
-                    return method.invokeExact(instance, args);
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
-
-        class Static implements StoredMethod {
-            private final MethodHandle method;
-
-            private Static(int args, MethodHandle method) {
-                this.method = method.asSpreader(Object[].class, args).asType(STATIC_METHOD_TYPE);
-            }
-
-            @Override
-            public Object invk(Object instance, Object[] args) {
-                try {
-                    return method.invokeExact(args);
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
-    }
-
-    public interface StoredField {
-        Object get(Object instance);
-
-        void set(Object instance, Object value);
-
-        static StoredField of(boolean isInstance, VarHandle handle) {
-            if (isInstance) {
-                return new Instance(handle);
-            } else {
-                return new Static(handle);
-            }
-        }
-
-        class Instance implements StoredField {
-            private final VarHandle varHandle;
-
-            private Instance(VarHandle handle) {
-                this.varHandle = handle;
-            }
-
-            @Override
-            public Object get(Object instance) {
-                return varHandle.get(instance);
-            }
-
-            @Override
-            public void set(Object instance, Object value) {
-                varHandle.set(instance, value);
-            }
-        }
-
-        class Static implements StoredField {
-            private final VarHandle varHandle;
-
-            private Static(VarHandle handle) {
-                this.varHandle = handle;
-            }
-
-            @Override
-            public Object get(Object instance) {
-                return varHandle.get();
-            }
-
-            @Override
-            public void set(Object instance, Object value) {
-                varHandle.set(value);
-            }
-        }
-    }
-
-    public interface RWrapperInterface {
-        Object unwrap();
-
-        default <S> S unwrap(Class<S> clazz) {
-            return clazz.cast(unwrap());
-        }
-    }
-
-    public record RedirectedCall(boolean isRedirected, Object result) { }
 
     public static class RClass {
         private final Supplier<Class<?>> lazyClz;
@@ -448,52 +336,4 @@ public class R {
         }
     }
 
-    public static abstract class RWrapper<S extends RWrapper<S>> {
-        protected final Object instance;
-
-        protected RWrapper(Object instance) {
-            if (instance == null) {
-                throw new RuntimeException("Cannot wrap null instance");
-            }
-            this.instance = instance;
-        }
-
-        public Object unwrap() {
-            return instance;
-        }
-
-        public <T> T unwrap(Class<T> clz) {
-            return clz.cast(instance);
-        }
-
-        public <T extends S> boolean isInstanceOf(Class<T> wrapperType) {
-            return ((RClass) clz(wrapperType).fld("clazz", RClass.class).get()).self().isAssignableFrom(instance.getClass());
-        }
-
-        public <T extends S> T downcast(Class<T> wrapperType) {
-            try {
-                return wrapperType.cast(((RClass) clz(wrapperType).fld("clazz", RClass.class).get()).inst(instance).fld("__wrapper", RWrapper.class).get());
-            } catch (Exception ignored) {
-                return wrapperType.cast(clz(wrapperType).mthd("inst", RWrapper.class, Object.class).invk(instance));
-            }
-        }
-
-        public boolean equals(S wrapper) {
-            if (wrapper == null) {
-                return false;
-            }
-            return Objects.equals(instance, wrapper.instance);
-        }
-
-        public static class Interceptor {
-            @RuntimeType
-            public static Object intercept(
-                @Origin Method method, @FieldValue(
-                    "__wrapper"
-                ) RWrapper<?> wrapper, @AllArguments Object[] args, @SuperCall Callable<?> superCall
-            ) throws Exception {
-                return superCall.call();
-            }
-        }
-    }
 }
