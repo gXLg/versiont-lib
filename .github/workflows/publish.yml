@@ -39,7 +39,9 @@ jobs:
 
       - name: Copy Artifacts And Push
         run: |
-          cp -r ./build/maven-repo/* maven-repo-clone/
+          echo "Test: $(pwd)"
+          exit 1
+          cp -r $(pwd)/build/maven-repo/* maven-repo-clone/
           cd maven-repo-clone
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
