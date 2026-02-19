@@ -16,10 +16,14 @@ public class V {
             R.RClass gameVersionClz = R.clz("net.minecraft.class_6489/com.mojang.bridge.game.GameVersion");
             Object gameVersion = constants.mthd("method_16673/getCurrentVersion", gameVersionClz.self()).invk();
             version = new MinecraftVersion((String) gameVersionClz.inst(gameVersion).mthd("method_48019/getName", String.class).invk());
-        } catch (Exception ignored) {
-            R.RClass gameVersionClz = R.clz("net.minecraft.class_6489/net.minecraft.WorldVersion");
-            Object gameVersion = constants.mthd("method_16673/getCurrentVersion", gameVersionClz.self()).invk();
-            version = new MinecraftVersion((String) gameVersionClz.inst(gameVersion).mthd("comp_4025/name", String.class).invk());
+        } catch (Throwable ignored) {
+            try {
+                R.RClass gameVersionClz = R.clz("net.minecraft.class_6489/net.minecraft.WorldVersion");
+                Object gameVersion = constants.mthd("method_16673/getCurrentVersion", gameVersionClz.self()).invk();
+                version = new MinecraftVersion((String) gameVersionClz.inst(gameVersion).mthd("comp_4025/name", String.class).invk());
+            } catch (Throwable ignored2) {
+                throw new RuntimeException("Version't failed to determine Minecraft version, please report this to the developer along with your Minecraft version and mod list");
+            }
         }
         return version;
     }

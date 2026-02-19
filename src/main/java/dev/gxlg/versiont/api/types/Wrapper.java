@@ -1,23 +1,39 @@
 package dev.gxlg.versiont.api.types;
 
-import net.bytebuddy.implementation.bind.annotation.AllArguments;
-import net.bytebuddy.implementation.bind.annotation.FieldValue;
-import net.bytebuddy.implementation.bind.annotation.Origin;
-import net.bytebuddy.implementation.bind.annotation.RuntimeType;
-import net.bytebuddy.implementation.bind.annotation.SuperCall;
+import dev.gxlg.versiont.api.R;
 
-import java.lang.reflect.Method;
+import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.Callable;
 
 public abstract class Wrapper<S extends Wrapper<S>> {
     protected final Object instance;
 
-    protected Wrapper(Object instance) {
+    @SuppressWarnings("unchecked")
+    protected Wrapper(DelayedConstructor delayedConstructor) {
+        Class<?> wrapperClass = this.getClass();
+        R.RClass actualClass = (R.RClass) R.clz(wrapperClass).fld("clazz", R.RClass.class).get();
+
+        Object instance = delayedConstructor.construct(actualClass);
         if (instance == null) {
             throw new RuntimeException("Cannot wrap null instance");
         }
         this.instance = instance;
+
+        // handling user classes (setting __wrapper field)
+        if (R.isUserClass(wrapperClass)) {
+            actualClass.inst(instance).fld("__wrapper", wrapperClass).set(this);
+        }
+
+        // saving interface instances
+        if (this instanceof WrapperInterface thisIface) {
+            for (Class<?> iface : wrapperClass.getInterfaces()) {
+                if (WrapperInterface.class.isAssignableFrom(iface)) {
+                    Class<?> ifaceWrapperClass = (Class<?>) R.clz(iface).fld("wrapper", Class.class).get();
+                    Map<WrapperInterface, Wrapper<?>> instances = (Map<WrapperInterface, Wrapper<?>>) R.clz(iface).fld("instances", Map.class).get();
+                    instances.put(thisIface, R.wrapperInst((Class<Wrapper<?>>) ifaceWrapperClass, instance));
+                }
+            }
+        }
     }
 
     public Object unwrap() {
@@ -35,14 +51,7 @@ public abstract class Wrapper<S extends Wrapper<S>> {
         return Objects.equals(instance, wrapper.instance);
     }
 
-    public static class Interceptor {
-        @RuntimeType
-        public static Object intercept(
-            @Origin Method method, @FieldValue(
-                "__wrapper"
-            ) Wrapper<?> wrapper, @AllArguments Object[] args, @SuperCall Callable<?> superCall
-        ) throws Exception {
-            return superCall.call();
-        }
+    public interface DelayedConstructor {
+        Object construct(R.RClass actualClass);
     }
 }
