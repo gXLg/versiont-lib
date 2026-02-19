@@ -23,7 +23,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build and Publish to Maven Repository
-        uses: gXLg/maven-action@12b5b7ee17d34cbf86340273e41c2d744a82124e
+        uses: gXLg/maven-action@1d22cc255c7f3684f3dc0baa1fa72c8e86364cbb
         with:
           token: ${{ secrets.MAVEN_TOKEN }}
 
