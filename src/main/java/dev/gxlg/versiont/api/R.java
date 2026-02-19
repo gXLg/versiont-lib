@@ -194,16 +194,16 @@ public class R {
         return new RedirectedCall(false, null);
     }
 
-    public static <T extends Wrapper<?>> T interfaceInstance(Class<? extends WrapperInterface> wrapperInterface, Class<T> wrapperClass) {
+    public static <T extends Wrapper<?>> T interfaceInstance(Object wrapper, Class<? extends WrapperInterface> wrapperInterface, Class<T> wrapperClass) {
         Class<?> implClz = ((RClass) clz(wrapperClass).fld("clazz", RClass.class).get()).self();
         return wrapperInst(
             wrapperClass, Proxy.newProxyInstance(
                 implClz.getClassLoader(), new Class[]{ implClz }, (proxy, method, args) -> {
-                    RedirectedCall redirect = interceptInterface(method, wrapperInterface, proxy, args);
+                    RedirectedCall redirect = interceptInterface(method, wrapperInterface, wrapper, args);
                     if (redirect.isRedirected()) {
                         return redirect.result();
                     }
-                    return InvocationHandler.invokeDefault(proxy, method, args);
+                    return InvocationHandler.invokeDefault(wrapper, method, args);
                 }
             )
         );
