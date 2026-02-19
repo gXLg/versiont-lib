@@ -28,7 +28,7 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          arguments: build publishToMavenLocal -Dmaven.repo.local=$(pwd)/build/maven-repo
+          arguments: build publishToMavenLocal -Dmaven.repo.local=/tmp/maven-repo
 
       - name: Checkout Maven Repo
         uses: actions/checkout@v4.1.1
@@ -39,9 +39,7 @@ jobs:
 
       - name: Copy Artifacts And Push
         run: |
-          echo "Test: $(pwd) | Ls: $(ls -la build/maven-repo) | Ls clone: $(ls -la maven-repo-clone)"
-          exit 1
-          cp -r $(pwd)/build/maven-repo/* maven-repo-clone/
+          cp -r /tmp/maven-repo/* maven-repo-clone/
           cd maven-repo-clone
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
