@@ -83,5 +83,10 @@ public class V {
         public boolean equal(String other) {
             return this.compare(other) == 0;
         }
+
+        @Override
+        public String toString() {
+            return major + "." + minor + "." + patch;
+        }
     }
 }

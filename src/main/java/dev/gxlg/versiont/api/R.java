@@ -62,6 +62,8 @@ public class R {
 
     private static final List<Class<?>> userClazzes = Collections.synchronizedList(new ArrayList<>());
 
+    private static final List<Class<?>> actualUserClazzes = Collections.synchronizedList(new ArrayList<>());
+
     private static <T> T cache(Map<ClassLoader, Map<Integer, T>> cache, Class<?> base, Class<?>[] types, String[] names, Supplier<T> supplier) {
         Map<Integer, T> cacheMap = cache.computeIfAbsent(Thread.currentThread().getContextClassLoader(), cl -> new HashMap<>());
         return cacheMap.computeIfAbsent(Objects.hash(base, Arrays.hashCode(types), Arrays.hashCode(names)), i -> supplier.get());
@@ -125,7 +127,7 @@ public class R {
         Class<?> current = instance.getClass();
 
         // try internal subclasses first
-        boolean userSubClass = userClazzes.contains(wrapperClass);
+        boolean userSubClass = isUserClass(wrapperClass);
         if (!userSubClass) {
             List<?> subClazzes = ((List<?>) clz(wrapperClass).fld("subClazzes", List.class).get());
             for (Object _subClazz : subClazzes) {
@@ -236,7 +238,9 @@ public class R {
                                                                   .defineField("__wrapper", extendingWrapper, Visibility.PUBLIC)
                                                                   .method(ElementMatchers.isVirtual().and(ElementMatchers.not(ElementMatchers.isFinalizer())))
                                                                   .intercept(MethodDelegation.to(Interceptor.class)).make();
-                return unloaded.load(superClz.getClassLoader(), ClassLoadingStrategy.Default.INJECTION).getLoaded();
+                Class<?> actualClass = unloaded.load(superClz.getClassLoader(), ClassLoadingStrategy.Default.INJECTION).getLoaded();
+                actualUserClazzes.add(actualClass);
+                return actualClass;
             } catch (Exception e) {
                 throw new RuntimeException("Failed to extend class", e);
             }
@@ -255,6 +259,43 @@ public class R {
 
     public static boolean isUserClass(Class<?> clz) {
         return userClazzes.contains(clz);
+    }
+
+    public static boolean isActualUserClass(Class<?> clz) {
+        return actualUserClazzes.contains(clz);
+    }
+
+    private static MethodHandle findMethodBetween(Class<?> lowestClass, Class<?> highestClass, String[] methodNames, Class<?> rtype, Class<?>[] ptypes) {
+        if (!isActualUserClass(lowestClass)) {
+            for (String name : methodNames) {
+                try {
+                    return LOOKUP.findSpecial(lowestClass, name, MethodType.methodType(rtype, ptypes), lowestClass).withVarargs(false);
+                } catch (NoSuchMethodException ignored) {
+                } catch (IllegalAccessException ignored) {
+                    try {
+                        return MethodHandles.privateLookupIn(lowestClass, LOOKUP).findSpecial(lowestClass, name, MethodType.methodType(rtype, ptypes), lowestClass).withVarargs(false);
+                    } catch (IllegalAccessException | NoSuchMethodException ignored2) {
+                    }
+                }
+            }
+        }
+        List<Class<?>> classesAbove = new ArrayList<>();
+        if (highestClass.isAssignableFrom(lowestClass.getSuperclass())) {
+            classesAbove.add(lowestClass.getSuperclass());
+        }
+        for (Class<?> iface : lowestClass.getInterfaces()) {
+            if (highestClass.isAssignableFrom(iface)) {
+                classesAbove.add(iface);
+            }
+        }
+        for (Class<?> classAbove : classesAbove) {
+            try {
+                return findMethodBetween(classAbove, highestClass, methodNames, rtype, ptypes);
+            } catch (RuntimeException ignored) {
+            }
+        }
+        throw new RuntimeException(
+            "Instance method not found from " + Arrays.toString(methodNames) + " between " + lowestClass + " and " + highestClass + " with signature " + Arrays.toString(ptypes) + " -> " + rtype);
     }
 
     public static class Interceptor {
@@ -375,20 +416,7 @@ public class R {
                     Class<?>[] ptypes = Arrays.copyOfRange(types, 1, types.length);
                     if (inst != null) {
                         // instance method
-                        for (String name : methodNames) {
-                            try {
-                                MethodHandle handle = LOOKUP.findSpecial(clz, name, MethodType.methodType(types[0], ptypes), clz).withVarargs(false);
-                                return StoredMethod.of(ptypes.length, true, handle);
-                            } catch (NoSuchMethodException ignored) {
-                            } catch (IllegalAccessException ignored) {
-                                try {
-                                    MethodHandle handle = MethodHandles.privateLookupIn(clz, LOOKUP).findSpecial(clz, name, MethodType.methodType(types[0], ptypes), clz).withVarargs(false);
-                                    return StoredMethod.of(ptypes.length, true, handle);
-                                } catch (IllegalAccessException | NoSuchMethodException ignored2) {
-                                }
-                            }
-                        }
-                        throw new RuntimeException("Instance method not found from " + Arrays.toString(methodNames) + " for " + clz + " with signature " + Arrays.toString(types));
+                        return StoredMethod.of(ptypes.length, true, findMethodBetween(inst.getClass(), clz, methodNames, types[0], ptypes));
                     } else {
                         // static method
                         for (String name : methodNames) {
@@ -404,7 +432,7 @@ public class R {
                                 }
                             }
                         }
-                        throw new RuntimeException("Static method not found from " + Arrays.toString(methodNames) + " for " + clz + " with signature " + Arrays.toString(types));
+                        throw new RuntimeException("Static method not found from " + Arrays.toString(methodNames) + " for " + clz + " with signature " + Arrays.toString(ptypes) + " -> " + types[0]);
                     }
                 }
             );

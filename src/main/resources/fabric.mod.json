@@ -9,8 +9,8 @@
   ],
   "contact": {
     "homepage": "https://github.com/gXLg/versiont-toolchain/wiki",
-    "sources": "https://github.com/gXLg/versiont-lib",
-    "issues": "https://github.com/gXLg/versiont-lib/issues"
+    "sources": "https://github.com/gXLg/versiont-library",
+    "issues": "https://github.com/gXLg/versiont-library/issues"
   },
   "license": "MIT",
   "icon": "assets/versiont/icon.png",
