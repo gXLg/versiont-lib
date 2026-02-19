@@ -22,13 +22,31 @@ jobs:
       - name: Mark Executable
         run: chmod +x ./gradlew
 
-      - name: Build and Publish to Maven Repo
+      - name: Build and Publish to Maven Local
         uses: burrunan/gradle-cache-action@v3
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          arguments: build publish
+          arguments: build publish publishToMavenLocal -Dmaven.repo.local=./build/maven-repo
+
+
+      - name: Checkout Maven Repo
+        uses: actions/checkout@v4.1.1
+        with:
+          repository: gXLg/maven-repo
+          path: maven-repo-clone
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Copy Artifacts And Push
+        run: |
+          cp -r ./build/maven-repo/* maven-repo-clone/
+          cd maven-repo-clone
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "Publish: Version't Lib ${{ github.event.release.tag_name }}" || echo "No changes"
+          git push
 
       - name: Update Description on Modrinth
         uses: funnyboy-roks/modrinth-auto-desc@v1.5
