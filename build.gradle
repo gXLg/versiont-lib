@@ -43,22 +43,3 @@ jar {
 		rename { "${it}_${inputs.properties.archivesName}"}
 	}
 }
-
-publishing {
-    publications {
-        create("mavenJava", MavenPublication) {
-            artifactId = project.archives_base_name
-            from components.java
-        }
-    }
-    repositories {
-        maven {
-            name = "GitHubPages"
-            url = uri("https://github.com/gXLg/maven-repo.git")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR")
-                password = System.getenv("GITHUB_TOKEN")
-            }
-        }
-    }
-}
