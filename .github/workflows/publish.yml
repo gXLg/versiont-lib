@@ -39,7 +39,7 @@ jobs:
 
       - name: Copy Artifacts And Push
         run: |
-          echo "Test: $(pwd)"
+          echo "Test: $(pwd) | Ls: $(ls -la build/maven-repo) | Ls clone: $(ls -la maven-repo-clone)"
           exit 1
           cp -r $(pwd)/build/maven-repo/* maven-repo-clone/
           cd maven-repo-clone
