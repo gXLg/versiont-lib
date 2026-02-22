@@ -29,7 +29,6 @@ import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -65,7 +64,7 @@ public class R {
     private static final List<Class<?>> actualUserClazzes = Collections.synchronizedList(new ArrayList<>());
 
     private static <T> T cache(Map<ClassLoader, Map<Integer, T>> cache, Class<?> base, Class<?>[] types, String[] names, Supplier<T> supplier) {
-        Map<Integer, T> cacheMap = cache.computeIfAbsent(Thread.currentThread().getContextClassLoader(), cl -> new HashMap<>());
+        Map<Integer, T> cacheMap = cache.computeIfAbsent(Thread.currentThread().getContextClassLoader(), cl -> new ConcurrentHashMap<>());
         return cacheMap.computeIfAbsent(Objects.hash(base, Arrays.hashCode(types), Arrays.hashCode(names)), i -> supplier.get());
     }
 
@@ -410,13 +409,14 @@ public class R {
 
         public RMethod(Object inst, String names, Class<?> clz, Class<?>[] types) {
             this.inst = inst;
+            Class<?> instClass = inst == null ? clz : inst.getClass();
             String[] methodNames = names.split("/");
             this.lazyMethod = () -> cache(
-                methodsCache, clz, types, methodNames, () -> {
+                methodsCache, instClass, types, methodNames, () -> {
                     Class<?>[] ptypes = Arrays.copyOfRange(types, 1, types.length);
                     if (inst != null) {
                         // instance method
-                        return StoredMethod.of(ptypes.length, true, findMethodBetween(inst.getClass(), clz, methodNames, types[0], ptypes));
+                        return StoredMethod.of(ptypes.length, true, findMethodBetween(instClass, clz, methodNames, types[0], ptypes));
                     } else {
                         // static method
                         for (String name : methodNames) {
