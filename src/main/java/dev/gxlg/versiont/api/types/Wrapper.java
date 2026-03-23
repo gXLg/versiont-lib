@@ -5,6 +5,7 @@ import dev.gxlg.versiont.api.R;
 import java.util.Map;
 import java.util.Objects;
 
+@SuppressWarnings("unused")
 public abstract class Wrapper<S extends Wrapper<S>> {
     protected final Object instance;
 
@@ -44,8 +45,12 @@ public abstract class Wrapper<S extends Wrapper<S>> {
         return clz.cast(instance);
     }
 
-    public boolean equals(S wrapper) {
-        if (wrapper == null) {
+    @Override
+    public boolean equals(Object that) {
+        if (that == null) {
+            return false;
+        }
+        if (!(that instanceof Wrapper<?> wrapper)) {
             return false;
         }
         return Objects.equals(instance, wrapper.instance);
