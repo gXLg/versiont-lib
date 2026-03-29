@@ -179,6 +179,10 @@ public class R {
     }
 
     private static RedirectedCall interceptInterface(Method method, Class<?> wrapperClass, Object wrapper, Object[] args) throws Exception {
+        if (wrapperClass == WrapperInterface.class) {
+            // stop recursion here
+            return new RedirectedCall(false, null);
+        }
         for (WrappedMethod wrappedMethod : getWrappedMethods(wrapperClass)) {
             if (wrappedMethod.matches(method)) {
                 return new RedirectedCall(true, wrappedMethod.invoke(wrapper, args));
@@ -202,7 +206,7 @@ public class R {
                     if (redirect.isRedirected()) {
                         return redirect.result();
                     }
-                    return InvocationHandler.invokeDefault(wrapper, method, args);
+                    return InvocationHandler.invokeDefault(proxy, method, args);
                 }
             )
         );
@@ -264,16 +268,36 @@ public class R {
         return actualUserClazzes.contains(clz);
     }
 
-    private static MethodHandle findMethodBetween(Class<?> lowestClass, Class<?> highestClass, String[] methodNames, Class<?> rtype, Class<?>[] ptypes) {
+    private static MethodHandle findMethodBetween(Class<?> lowestClass, Class<?> highestClass, String[] methodNames, Class<?>[] types) {
         if (!isActualUserClass(lowestClass)) {
             for (String name : methodNames) {
+                Method matching = null;
+                for (Method method : lowestClass.getDeclaredMethods()) {
+                    if (method.getName().equals(name) && methodMatches(method, types)) {
+                        matching = method;
+                        break;
+                    }
+                }
+                if (matching == null) {
+                    continue;
+                }
+                MethodType methodType = MethodType.methodType(matching.getReturnType(), matching.getParameterTypes());
+
                 try {
-                    return LOOKUP.findSpecial(lowestClass, name, MethodType.methodType(rtype, ptypes), lowestClass).withVarargs(false);
+                    return LOOKUP.findSpecial(lowestClass, name, methodType, lowestClass).withVarargs(false);
                 } catch (NoSuchMethodException ignored) {
                 } catch (IllegalAccessException ignored) {
                     try {
-                        return MethodHandles.privateLookupIn(lowestClass, LOOKUP).findSpecial(lowestClass, name, MethodType.methodType(rtype, ptypes), lowestClass).withVarargs(false);
+                        return MethodHandles.privateLookupIn(lowestClass, LOOKUP).findSpecial(lowestClass, name, methodType, lowestClass).withVarargs(false);
                     } catch (IllegalAccessException | NoSuchMethodException ignored2) {
+                        try {
+                            return LOOKUP.unreflect(matching).withVarargs(false);
+                        } catch (IllegalAccessException ignored3) {
+                            try {
+                                return MethodHandles.privateLookupIn(lowestClass, LOOKUP).unreflect(matching).withVarargs(false);
+                            } catch (IllegalAccessException ignored4) {
+                            }
+                        }
                     }
                 }
             }
@@ -289,12 +313,11 @@ public class R {
         }
         for (Class<?> classAbove : classesAbove) {
             try {
-                return findMethodBetween(classAbove, highestClass, methodNames, rtype, ptypes);
+                return findMethodBetween(classAbove, highestClass, methodNames, types);
             } catch (RuntimeException ignored) {
             }
         }
-        throw new RuntimeException(
-            "Instance method not found from " + Arrays.toString(methodNames) + " between " + lowestClass + " and " + highestClass + " with signature " + Arrays.toString(ptypes) + " -> " + rtype);
+        throw new RuntimeException("Instance method not found from " + Arrays.toString(methodNames) + " between " + lowestClass + " and " + highestClass + " with signature " + Arrays.toString(types));
     }
 
     public static class Interceptor {
@@ -344,11 +367,7 @@ public class R {
         }
 
         public RInstance inst(Object inst) {
-            try {
-                return new RInstance(self(), self().cast(inst));
-            } catch (ClassCastException e) {
-                throw new RuntimeException("Object is not of type " + self().getName() + ", instead: " + inst.getClass().getName());
-            }
+            return new RInstance(this::self, s -> s.cast(inst));
         }
 
         public RConstructor constr(Class<?>... types) {
@@ -378,25 +397,43 @@ public class R {
     }
 
     public static class RInstance {
-        private final Class<?> clz;
+        private final AtomicReference<Class<?>> clz = new AtomicReference<>();
 
-        private final Object inst;
+        private final AtomicReference<Object> inst = new AtomicReference<>();
 
-        private RInstance(Class<?> clz, Object inst) {
-            this.clz = clz;
-            this.inst = inst;
+        private final Supplier<Class<?>> lazyClz;
+
+        private final Function<Class<?>, Object> lazyInst;
+
+        private RInstance(Supplier<Class<?>> lazyClz, Function<Class<?>, Object> lazyInst) {
+            this.lazyClz = lazyClz;
+            this.lazyInst = lazyInst;
         }
 
         public RField fld(String names, Class<?> type) {
-            return new RField(inst, names, clz, type);
+            return new RField(self(), names, selfClz(), type);
         }
 
         public RMethod mthd(String names, Class<?>... types) {
-            return new RMethod(inst, names, clz, types);
+            return new RMethod(self(), names, selfClz(), types);
         }
 
         public Object self() {
-            return inst;
+            return inst.updateAndGet(inst -> {
+                if (inst == null) {
+                    return lazyInst.apply(selfClz());
+                }
+                return inst;
+            });
+        }
+
+        private Class<?> selfClz() {
+            return clz.updateAndGet(clz -> {
+                if (clz == null) {
+                    return lazyClz.get();
+                }
+                return clz;
+            });
         }
     }
 
@@ -416,7 +453,7 @@ public class R {
                     Class<?>[] ptypes = Arrays.copyOfRange(types, 1, types.length);
                     if (inst != null) {
                         // instance method
-                        return StoredMethod.of(ptypes.length, true, findMethodBetween(instClass, clz, methodNames, types[0], ptypes));
+                        return StoredMethod.of(ptypes.length, true, findMethodBetween(instClass, clz, methodNames, types));
                     } else {
                         // static method
                         for (String name : methodNames) {
@@ -527,11 +564,13 @@ public class R {
         }
 
         public RInstance newInst(Object... args) {
+            Object inst;
             try {
-                return new RInstance(clz, self().invokeExact(args));
+                inst = self().invokeExact(args);
             } catch (Throwable e) {
                 throw new RuntimeException(e);
             }
+            return new RInstance(() -> clz, c -> inst);
         }
 
         public MethodHandle self() {
