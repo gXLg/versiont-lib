@@ -323,11 +323,19 @@ public class R {
     public static class Interceptor {
         @RuntimeType
         public static Object intercept(@Origin Method method, @FieldValue("__wrapper") Wrapper<?> wrapper, @AllArguments Object[] args, @SuperCall Callable<?> superCall) throws Exception {
+            if (wrapper == null) {
+                wrapper = Wrapper.__preInitWrapper;
+            }
+
             return R.intercept(method, wrapper.getClass(), wrapper, args, superCall);
         }
 
         @RuntimeType
         public static Object interceptAbstract(@Origin Method method, @FieldValue("__wrapper") Wrapper<?> wrapper, @AllArguments Object[] args) throws Exception {
+            if (wrapper == null) {
+                wrapper = Wrapper.__preInitWrapper;
+            }
+
             RedirectedCall redirect = interceptInterface(method, wrapper.getClass(), wrapper, args);
             if (redirect.isRedirected()) {
                 return redirect.result();
