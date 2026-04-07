@@ -269,7 +269,13 @@ public class R {
     }
 
     private static MethodHandle findMethodBetween(Class<?> lowestClass, Class<?> highestClass, String[] methodNames, Class<?>[] types) {
-        if (!isActualUserClass(lowestClass)) {
+        boolean isUserClass = isActualUserClass(lowestClass);
+        // some custom class loaders (such as LunarClient's) fail to find local classes,
+        // but also we shouldn't reference methods from local classes, so we skip them
+        boolean isLocalClass = lowestClass.isLocalClass();
+        boolean shouldSearchForMethods = !isUserClass && !isLocalClass;
+
+        if (shouldSearchForMethods) {
             for (String name : methodNames) {
                 Method matching = null;
                 for (Method method : lowestClass.getDeclaredMethods()) {
