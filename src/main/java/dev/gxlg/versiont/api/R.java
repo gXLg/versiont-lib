@@ -269,6 +269,7 @@ public class R {
     }
 
     private static MethodHandle findMethodBetween(Class<?> lowestClass, Class<?> highestClass, String[] methodNames, Class<?>[] types) {
+        // we don't search for methods in user classes, because they are redirected anyway
         boolean isUserClass = isActualUserClass(lowestClass);
         // some custom class loaders (such as LunarClient's) fail to find local classes,
         // but also we shouldn't reference methods from local classes, so we skip them
