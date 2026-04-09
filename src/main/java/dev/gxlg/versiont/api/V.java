@@ -1,7 +1,13 @@
 package dev.gxlg.versiont.api;
 
+import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.ModContainer;
+import net.fabricmc.loader.api.Version;
+
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 @SuppressWarnings("unused")
 public class V {
@@ -19,10 +25,20 @@ public class V {
             if (modContainer.isEmpty()) {
                 throw new RuntimeException("Version't failed to determine Minecraft version, please report this to the developer along with your Minecraft version and mod list");
             }
-        }
-        return version;
             Version version = modContainer.get().getMetadata().getVersion();
             return new MinecraftVersion(version.getFriendlyString());
+        });
+    }
+
+    public static boolean isObfuscated() {
+        return obfuscated.updateAndGet(obf -> {
+            if (obf != null) {
+                return obf;
+            }
+            if (FabricLoader.getInstance().isDevelopmentEnvironment()) {
+                return false;
+            }
+            return lower("26.1");
         });
     }
 
