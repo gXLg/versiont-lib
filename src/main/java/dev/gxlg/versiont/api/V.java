@@ -5,27 +5,25 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings("unused")
 public class V {
-    private static MinecraftVersion version = null;
+    private static final AtomicReference<MinecraftVersion> version = new AtomicReference<>();
+
+    private static final AtomicReference<Boolean> obfuscated = new AtomicReference<>();
 
     public static MinecraftVersion getVersion() {
-        if (version != null) {
-            return version;
-        }
-        R.RClass constants = R.clz("net.minecraft.class_155/net.minecraft.SharedConstants");
-        try {
-            R.RClass gameVersionClz = R.clz("net.minecraft.class_6489/com.mojang.bridge.game.GameVersion");
-            Object gameVersion = constants.mthd("method_16673/getCurrentVersion", gameVersionClz.self()).invk();
-            version = new MinecraftVersion((String) gameVersionClz.inst(gameVersion).mthd("method_48019/getName", String.class).invk());
-        } catch (Throwable ignored) {
-            try {
-                R.RClass gameVersionClz = R.clz("net.minecraft.class_6489/net.minecraft.WorldVersion");
-                Object gameVersion = constants.mthd("method_16673/getCurrentVersion", gameVersionClz.self()).invk();
-                version = new MinecraftVersion((String) gameVersionClz.inst(gameVersion).mthd("comp_4025/name", String.class).invk());
-            } catch (Throwable ignored2) {
+        return version.updateAndGet(v -> {
+            if (v != null) {
+                return v;
+            }
+            FabricLoader loader = FabricLoader.getInstance();
+            Optional<ModContainer> modContainer = loader.getModContainer("minecraft");
+            if (modContainer.isEmpty()) {
                 throw new RuntimeException("Version't failed to determine Minecraft version, please report this to the developer along with your Minecraft version and mod list");
             }
         }
         return version;
+            Version version = modContainer.get().getMetadata().getVersion();
+            return new MinecraftVersion(version.getFriendlyString());
+        });
     }
 
     public static boolean higher(String other) {
