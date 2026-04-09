@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
 @Target({ ElementType.TYPE })
 @Retention(RetentionPolicy.RUNTIME)
 public @interface VersiontMixin {
-    Compare[] compare() default {};
+    Compare[] compare() default { };
 
     boolean obfuscated() default false;
 }
