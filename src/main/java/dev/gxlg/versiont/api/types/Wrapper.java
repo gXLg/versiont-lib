@@ -23,10 +23,16 @@ public abstract class Wrapper<S extends Wrapper<S>> {
             this.instance = instance;
             __preInitWrapper = null;
 
-            // handling user classes (setting __wrapper field)
-            if (R.isUserClass(wrapperClass)) {
-                actualClass.inst(instance).fld("__wrapper", wrapperClass).set(this);
-            }
+            // handling user classes
+            // - setting "__wrapper" field on the class and all superclasses
+            Class<?> currentClass = wrapperClass;
+            R.RClass currentActualClass = actualClass;
+            do {
+                currentActualClass.inst(instance).fld("__wrapper", currentClass).set(this);
+                currentClass = currentClass.getSuperclass();
+                currentActualClass = (R.RClass) R.clz(currentClass).fld("clazz", R.RClass.class).get();
+
+            } while (currentClass != null && R.isUserClass(currentClass));
 
             // saving interface instances
             if (this instanceof WrapperInterface thisIface) {
