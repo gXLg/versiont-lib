@@ -5,7 +5,11 @@ import java.util.function.Function;
 
 public record WrappedMethod(Function<Method, Boolean> matcher, Invoker invoker) {
     public boolean matches(Method method) {
-        return matcher.apply(method);
+        try {
+            return matcher.apply(method);
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     public Object invoke(Object wrapper, Object[] args) throws Exception {
