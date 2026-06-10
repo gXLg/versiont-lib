@@ -10,6 +10,8 @@ import net.bytebuddy.ByteBuddy;
 import net.bytebuddy.description.modifier.Visibility;
 import net.bytebuddy.dynamic.DynamicType;
 import net.bytebuddy.dynamic.loading.ClassLoadingStrategy;
+import net.bytebuddy.dynamic.scaffold.subclass.ConstructorStrategy;
+import net.bytebuddy.implementation.MethodCall;
 import net.bytebuddy.implementation.MethodDelegation;
 import net.bytebuddy.implementation.bind.annotation.AllArguments;
 import net.bytebuddy.implementation.bind.annotation.FieldValue;
@@ -240,10 +242,14 @@ public class R {
                     interfaces[i] = ((RClass) clz(implementingInterfaces[i]).fld("clazz", RClass.class).get()).self();
                 }
 
-                DynamicType.Unloaded<?> unloaded = new ByteBuddy().subclass(superClz).implement(interfaces).name(extendingWrapper.getName() + "Impl")
-                                                                  .defineField("__wrapper", extendingWrapper, Visibility.PUBLIC)
-                                                                  .method(ElementMatchers.isVirtual().and(ElementMatchers.not(ElementMatchers.isFinalizer())))
-                                                                  .intercept(MethodDelegation.to(Interceptor.class)).make();
+                DynamicType.Builder<?> builder = new ByteBuddy().subclass(superClz, ConstructorStrategy.Default.NO_CONSTRUCTORS).implement(interfaces).name(extendingWrapper.getName() + "Impl");
+                for (Constructor<?> con : superClz.getDeclaredConstructors()) {
+                    Class<?>[] params = con.getParameterTypes();
+                    builder = builder.defineConstructor(Visibility.PUBLIC).withParameters(params).intercept(MethodCall.invoke(con).withAllArguments());
+                }
+                DynamicType.Unloaded<?> unloaded = builder.defineField("__wrapper", extendingWrapper, Visibility.PUBLIC)
+                                                          .method(ElementMatchers.isVirtual().and(ElementMatchers.not(ElementMatchers.isFinalizer()))).intercept(MethodDelegation.to(Interceptor.class))
+                                                          .make();
                 Class<?> actualClass = unloaded.load(superClz.getClassLoader(), ClassLoadingStrategy.Default.INJECTION).getLoaded();
                 actualUserClazzes.add(actualClass);
                 return actualClass;
