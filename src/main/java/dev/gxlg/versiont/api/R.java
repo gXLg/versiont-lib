@@ -322,8 +322,9 @@ public class R {
             }
         }
         List<Class<?>> classesAbove = new ArrayList<>();
-        if (highestClass.isAssignableFrom(lowestClass.getSuperclass())) {
-            classesAbove.add(lowestClass.getSuperclass());
+        Class<?> superClass = lowestClass.getSuperclass();
+        if (superClass != null && highestClass.isAssignableFrom(superClass)) {
+            classesAbove.add(superClass);
         }
         for (Class<?> iface : lowestClass.getInterfaces()) {
             if (highestClass.isAssignableFrom(iface)) {
