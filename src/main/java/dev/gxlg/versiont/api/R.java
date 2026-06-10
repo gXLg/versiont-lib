@@ -216,6 +216,9 @@ public class R {
         if (userClazzes.contains(wrapperClass)) {
             return List.of();
         }
+        if (!Wrapper.class.isAssignableFrom(wrapperClass) && !WrapperInterface.class.isAssignableFrom(wrapperClass)) {
+            return List.of();
+        }
         List<WrappedMethod> wrappedMethods = new ArrayList<>();
         List<?> _wrappedMethods = ((List<?>) clz(wrapperClass).fld("wrappedMethods", List.class).get());
         for (Object _wrappedMethod : _wrappedMethods) {
