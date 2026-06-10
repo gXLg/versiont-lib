@@ -263,7 +263,10 @@ public class R {
         CompletableFuture.runAsync(
             () -> {
                 for (RClass clz : classes) {
-                    clz.self();
+                    try {
+                        clz.self();
+                    } catch (Throwable ignored) {
+                    }
                 }
             }, Executors.newSingleThreadExecutor()
         );
