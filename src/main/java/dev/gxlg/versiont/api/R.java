@@ -181,7 +181,7 @@ public class R {
     }
 
     private static RedirectedCall interceptInterface(Method method, Class<?> wrapperClass, Object wrapper, Object[] args) throws Exception {
-        if (wrapperClass == WrapperInterface.class) {
+        if (wrapperClass == WrapperInterface.class || wrapperClass == Wrapper.class) {
             // stop recursion here
             return new RedirectedCall(false, null);
         }
@@ -195,6 +195,10 @@ public class R {
             if (redirect.isRedirected()) {
                 return redirect;
             }
+        }
+        Class<?> superClass = wrapperClass.getSuperclass();
+        if (superClass != null) {
+            return interceptInterface(method, superClass, wrapper, args);
         }
         return new RedirectedCall(false, null);
     }
