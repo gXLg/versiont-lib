@@ -379,6 +379,55 @@ public class R {
                 return cache(
                     clazzCache, null, new Class[0], classNames, () -> {
                         for (String clazz : classNames) {
+                            if (clazz.contains("@")) {
+                                // conditional class names (format: "@obf", "@deobf", "@deobf,>1.21")
+                                String[] parts = clazz.split("@");
+                                clazz = parts[0];
+                                String[] conditions = parts[1].split(",");
+                                boolean pass = true;
+                                for (String condition : conditions) {
+                                    if (condition.equals("obf") && !V.isObfuscated()) {
+                                        pass = false;
+                                        break;
+                                    } else if (condition.equals("deobf") && V.isObfuscated()) {
+                                        pass = false;
+                                        break;
+                                    } else if (condition.startsWith(">=")) {
+                                        String version = condition.substring(2);
+                                        if (V.lower(version)) {
+                                            pass = false;
+                                            break;
+                                        }
+                                    } else if (condition.startsWith(">")) {
+                                        String version = condition.substring(1);
+                                        if (!V.higher(version)) {
+                                            pass = false;
+                                            break;
+                                        }
+                                    } else if (condition.startsWith("<=")) {
+                                        String version = condition.substring(2);
+                                        if (V.higher(version)) {
+                                            pass = false;
+                                            break;
+                                        }
+                                    } else if (condition.startsWith("<")) {
+                                        String version = condition.substring(1);
+                                        if (!V.lower(version)) {
+                                            pass = false;
+                                            break;
+                                        }
+                                    } else if (condition.startsWith("=")) {
+                                        String version = condition.substring(1);
+                                        if (!V.equal(version)) {
+                                            pass = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (!pass) {
+                                    continue;
+                                }
+                            }
                             try {
                                 return Class.forName(clazz);
                             } catch (ClassNotFoundException ignored) {
