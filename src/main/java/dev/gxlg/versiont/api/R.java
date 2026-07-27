@@ -78,6 +78,10 @@ public class R {
         return new RClass(clz);
     }
 
+    public static RClass clz(Supplier<Class<?>> loader) {
+        return new RClass(loader);
+    }
+
     @SuppressWarnings("unchecked")
     public static <T> Function<Object, T[]> arrayWrapper(Function<Object, T> wrapperT) {
         return obj -> (T[]) Stream.of((Object[]) obj).map(wrapperT).toArray();
@@ -91,7 +95,13 @@ public class R {
         return obj -> obj == null ? null : function.apply(obj);
     }
 
-    public static boolean methodMatches(Method method, Class<?>... types) {
+    public static boolean methodMatches(Method method, RClass... rTypes) {
+        Class<?>[] types;
+        try {
+            types = Arrays.stream(rTypes).map(RClass::self).toArray(Class[]::new);
+        } catch (Exception ignored) {
+            return false;
+        }
         Class<?> returnType = types[0];
         Class<?>[] methodParams = method.getParameterTypes();
         if (types.length - 1 != methodParams.length) {
@@ -130,11 +140,11 @@ public class R {
         // try internal subclasses first
         boolean userSubClass = isUserClass(wrapperClass);
         if (!userSubClass) {
-            List<?> subClazzes = ((List<?>) clz(wrapperClass).fld("subClazzes", List.class).get());
+            List<?> subClazzes = ((List<?>) clz(wrapperClass).fld("subClazzes", clz(List.class)).get());
             for (Object _subClazz : subClazzes) {
                 Class<? extends T> subClazz = (Class<? extends T>) _subClazz;
                 try {
-                    Class<?> actualSubClass = ((R.RClass) R.clz(subClazz).fld("clazz", R.RClass.class).get()).self();
+                    Class<?> actualSubClass = ((R.RClass) R.clz(subClazz).fld("clazz", clz(RClass.class)).get()).self();
                     if (actualSubClass.isAssignableFrom(current)) {
                         return wrapperInst(subClazz, instance);
                     }
@@ -147,19 +157,19 @@ public class R {
         // then try user subclasses, which can be added at runtime
         for (Class<?> _subClazz : userSubClazzes.getOrDefault(wrapperClass, List.of())) {
             Class<? extends T> subClazz = (Class<? extends T>) _subClazz;
-            Class<?> actualSubClass = ((RClass) clz(subClazz).fld("clazz", RClass.class).get()).self();
+            Class<?> actualSubClass = ((RClass) clz(subClazz).fld("clazz", clz(RClass.class)).get()).self();
             if (actualSubClass.isAssignableFrom(current)) {
                 return wrapperInst(subClazz, instance);
             }
         }
 
         if (userSubClass) {
-            Class<?> actualSubClass = ((RClass) clz(wrapperClass).fld("clazz", RClass.class).get()).self();
-            return wrapperClass.cast(clz(actualSubClass).inst(instance).fld("__wrapper", Wrapper.class).get());
+            Class<?> actualSubClass = ((RClass) clz(wrapperClass).fld("clazz", clz(RClass.class)).get()).self();
+            return wrapperClass.cast(clz(actualSubClass).inst(instance).fld("__wrapper", clz(Wrapper.class)).get());
         }
 
         // finally, if no subclass matches, use wrapper constructor
-        return wrapperClass.cast(clz(wrapperClass).constr(Wrapper.DelayedConstructor.class).newInst((Wrapper.DelayedConstructor) clz -> instance).self());
+        return wrapperClass.cast(clz(wrapperClass).constr(clz(Wrapper.DelayedConstructor.class)).newInst((Wrapper.DelayedConstructor) clz -> instance).self());
     }
 
     private static Object intercept(Method method, Class<?> wrapperClass, Object wrapper, Object[] args, Callable<?> superCall) throws Exception {
@@ -204,7 +214,7 @@ public class R {
     }
 
     public static <T extends Wrapper<?>> T interfaceInstance(Object wrapper, Class<? extends WrapperInterface> wrapperInterface, Class<T> wrapperClass) {
-        Class<?> implClz = ((RClass) clz(wrapperClass).fld("clazz", RClass.class).get()).self();
+        Class<?> implClz = ((RClass) clz(wrapperClass).fld("clazz", clz(RClass.class)).get()).self();
         return wrapperInst(
             wrapperClass, Proxy.newProxyInstance(
                 implClz.getClassLoader(), new Class[]{ implClz }, (proxy, method, args) -> {
@@ -226,7 +236,7 @@ public class R {
             return List.of();
         }
         List<WrappedMethod> wrappedMethods = new ArrayList<>();
-        List<?> _wrappedMethods = ((List<?>) clz(wrapperClass).fld("wrappedMethods", List.class).get());
+        List<?> _wrappedMethods = ((List<?>) clz(wrapperClass).fld("wrappedMethods", clz(List.class)).get());
         for (Object _wrappedMethod : _wrappedMethods) {
             wrappedMethods.add((WrappedMethod) _wrappedMethod);
         }
@@ -240,10 +250,10 @@ public class R {
         userClazzes.add(extendingWrapper);
         return new RClass(() -> {
             try {
-                Class<?> superClz = ((RClass) clz(superClass).fld("clazz", RClass.class).get()).self();
+                Class<?> superClz = ((RClass) clz(superClass).fld("clazz", clz(RClass.class)).get()).self();
                 Class<?>[] interfaces = new Class[implementingInterfaces.length];
                 for (int i = 0; i < implementingInterfaces.length; i++) {
-                    interfaces[i] = ((RClass) clz(implementingInterfaces[i]).fld("clazz", RClass.class).get()).self();
+                    interfaces[i] = ((RClass) clz(implementingInterfaces[i]).fld("clazz", clz(RClass.class)).get()).self();
                 }
 
                 DynamicType.Builder<?> builder = new ByteBuddy().subclass(superClz, ConstructorStrategy.Default.NO_CONSTRUCTORS).implement(interfaces).name(extendingWrapper.getName() + "Impl");
@@ -284,7 +294,7 @@ public class R {
         return actualUserClazzes.contains(clz);
     }
 
-    private static MethodHandle findMethodBetween(Class<?> lowestClass, Class<?> highestClass, String[] methodNames, Class<?>[] types) {
+    private static MethodHandle findMethodBetween(Class<?> lowestClass, Class<?> highestClass, String[] methodNames, RClass[] rTypes) {
         // we don't search for methods in user classes, because they are redirected anyway
         boolean isUserClass = isActualUserClass(lowestClass);
         // some custom class loaders (such as LunarClient's) fail to find local classes,
@@ -296,7 +306,7 @@ public class R {
             for (String name : methodNames) {
                 Method matching = null;
                 for (Method method : lowestClass.getDeclaredMethods()) {
-                    if (method.getName().equals(name) && methodMatches(method, types)) {
+                    if (method.getName().equals(name) && methodMatches(method, rTypes)) {
                         matching = method;
                         break;
                     }
@@ -337,11 +347,11 @@ public class R {
         }
         for (Class<?> classAbove : classesAbove) {
             try {
-                return findMethodBetween(classAbove, highestClass, methodNames, types);
+                return findMethodBetween(classAbove, highestClass, methodNames, rTypes);
             } catch (RuntimeException ignored) {
             }
         }
-        throw new RuntimeException("Instance method not found from " + Arrays.toString(methodNames) + " between " + lowestClass + " and " + highestClass + " with signature " + Arrays.toString(types));
+        throw new RuntimeException("Instance method not found from " + Arrays.toString(methodNames) + " between " + lowestClass + " and " + highestClass);
     }
 
     public static class Interceptor {
@@ -451,16 +461,16 @@ public class R {
             return new RInstance(this::self, s -> s.cast(inst));
         }
 
-        public RConstructor constr(Class<?>... types) {
-            return new RConstructor(self(), types);
+        public RConstructor constr(RClass... rTypes) {
+            return new RConstructor(self(), rTypes);
         }
 
-        public RField fld(String names, Class<?> type) {
-            return new RField(null, names, self(), type);
+        public RField fld(String names, RClass rType) {
+            return new RField(null, names, self(), rType);
         }
 
-        public RMethod mthd(String names, Class<?>... types) {
-            return new RMethod(null, names, self(), types);
+        public RMethod mthd(String names, RClass... rTypes) {
+            return new RMethod(null, names, self(), rTypes);
         }
 
         public Class<?> self() {
@@ -473,7 +483,7 @@ public class R {
         }
 
         public RClass arrayType() {
-            return clz(self().arrayType());
+            return clz(() -> self().arrayType());
         }
     }
 
@@ -491,12 +501,12 @@ public class R {
             this.lazyInst = lazyInst;
         }
 
-        public RField fld(String names, Class<?> type) {
-            return new RField(self(), names, selfClz(), type);
+        public RField fld(String names, RClass rType) {
+            return new RField(self(), names, selfClz(), rType);
         }
 
-        public RMethod mthd(String names, Class<?>... types) {
-            return new RMethod(self(), names, selfClz(), types);
+        public RMethod mthd(String names, RClass... rTypes) {
+            return new RMethod(self(), names, selfClz(), rTypes);
         }
 
         public Object self() {
@@ -525,35 +535,39 @@ public class R {
 
         private final AtomicReference<StoredMethod> method = new AtomicReference<>();
 
-        public RMethod(Object inst, String names, Class<?> clz, Class<?>[] types) {
+        public RMethod(Object inst, String names, Class<?> clz, RClass[] rTypes) {
             this.inst = inst;
             Class<?> instClass = inst == null ? clz : inst.getClass();
             String[] methodNames = names.split("/");
-            this.lazyMethod = () -> cache(
-                methodsCache, instClass, types, methodNames, () -> {
-                    Class<?>[] ptypes = Arrays.copyOfRange(types, 1, types.length);
-                    if (inst != null) {
-                        // instance method
-                        return StoredMethod.of(ptypes.length, true, findMethodBetween(instClass, clz, methodNames, types));
-                    } else {
-                        // static method
-                        for (String name : methodNames) {
-                            try {
-                                MethodHandle handle = LOOKUP.findStatic(clz, name, MethodType.methodType(types[0], ptypes)).withVarargs(false);
-                                return StoredMethod.of(ptypes.length, false, handle);
-                            } catch (NoSuchMethodException ignored) {
-                            } catch (IllegalAccessException ignored) {
+            this.lazyMethod = () -> {
+                Class<?>[] types = Arrays.stream(rTypes).map(RClass::self).toArray(Class[]::new);
+                return cache(
+                    methodsCache, instClass, types, methodNames, () -> {
+                        Class<?>[] ptypes = Arrays.copyOfRange(types, 1, types.length);
+                        if (inst != null) {
+                            // instance method
+                            return StoredMethod.of(ptypes.length, true, findMethodBetween(instClass, clz, methodNames, rTypes));
+                        } else {
+                            // static method
+                            for (String name : methodNames) {
                                 try {
-                                    MethodHandle handle = MethodHandles.privateLookupIn(clz, LOOKUP).findStatic(clz, name, MethodType.methodType(types[0], ptypes)).withVarargs(false);
+                                    MethodHandle handle = LOOKUP.findStatic(clz, name, MethodType.methodType(types[0], ptypes)).withVarargs(false);
                                     return StoredMethod.of(ptypes.length, false, handle);
-                                } catch (IllegalAccessException | NoSuchMethodException ignored2) {
+                                } catch (NoSuchMethodException ignored) {
+                                } catch (IllegalAccessException ignored) {
+                                    try {
+                                        MethodHandle handle = MethodHandles.privateLookupIn(clz, LOOKUP).findStatic(clz, name, MethodType.methodType(types[0], ptypes)).withVarargs(false);
+                                        return StoredMethod.of(ptypes.length, false, handle);
+                                    } catch (IllegalAccessException | NoSuchMethodException ignored2) {
+                                    }
                                 }
                             }
+                            throw new RuntimeException(
+                                "Static method not found from " + Arrays.toString(methodNames) + " for " + clz + " with signature " + Arrays.toString(ptypes) + " -> " + types[0]);
                         }
-                        throw new RuntimeException("Static method not found from " + Arrays.toString(methodNames) + " for " + clz + " with signature " + Arrays.toString(ptypes) + " -> " + types[0]);
                     }
-                }
-            );
+                );
+            };
         }
 
         public Object invk(Object... args) throws Throwable {
@@ -577,30 +591,33 @@ public class R {
 
         private final AtomicReference<StoredField> fld = new AtomicReference<>();
 
-        public RField(Object inst, String names, Class<?> clz, Class<?> fieldType) {
+        public RField(Object inst, String names, Class<?> clz, RClass rFieldType) {
             this.inst = inst;
             String[] fieldNames = names.split("/");
-            this.lazyField = () -> cache(
-                fieldsCache, clz, new Class[]{ fieldType }, fieldNames, () -> {
-                    Set<String> nameSet = Set.of(fieldNames);
-                    for (Field field : clz.getDeclaredFields()) {
-                        if (nameSet.contains(field.getName()) && fieldMatches(field, fieldType)) {
-                            try {
-                                if (!field.trySetAccessible()) {
-                                    continue;
-                                }
-                                return StoredField.of(inst != null, LOOKUP.unreflectVarHandle(field));
-                            } catch (IllegalAccessException ignored) {
+            this.lazyField = () -> {
+                Class<?> fieldType = rFieldType.self();
+                return cache(
+                    fieldsCache, clz, new Class[]{ fieldType }, fieldNames, () -> {
+                        Set<String> nameSet = Set.of(fieldNames);
+                        for (Field field : clz.getDeclaredFields()) {
+                            if (nameSet.contains(field.getName()) && fieldMatches(field, fieldType)) {
                                 try {
-                                    return StoredField.of(inst != null, MethodHandles.privateLookupIn(clz, LOOKUP).unreflectVarHandle(field));
-                                } catch (IllegalAccessException ignored2) {
+                                    if (!field.trySetAccessible()) {
+                                        continue;
+                                    }
+                                    return StoredField.of(inst != null, LOOKUP.unreflectVarHandle(field));
+                                } catch (IllegalAccessException ignored) {
+                                    try {
+                                        return StoredField.of(inst != null, MethodHandles.privateLookupIn(clz, LOOKUP).unreflectVarHandle(field));
+                                    } catch (IllegalAccessException ignored2) {
+                                    }
                                 }
                             }
                         }
+                        throw new RuntimeException("Field not found from " + Arrays.toString(fieldNames) + " for " + clz + " of type " + fieldType);
                     }
-                    throw new RuntimeException("Field not found from " + Arrays.toString(fieldNames) + " for " + clz + " of type " + fieldType);
-                }
-            );
+                );
+            };
         }
 
         public void set(Object value) {
@@ -628,20 +645,23 @@ public class R {
 
         private final AtomicReference<MethodHandle> constr = new AtomicReference<>();
 
-        private RConstructor(Class<?> clz, Class<?>... types) {
+        private RConstructor(Class<?> clz, RClass... rTypes) {
             this.clz = clz;
-            this.lazyConstr = () -> cache(
-                constructorsCache, clz, types, new String[0], () -> {
-                    try {
-                        Constructor<?> c = clz.getDeclaredConstructor(types);
-                        c.setAccessible(true);
-                        MethodHandle handle = LOOKUP.unreflectConstructor(c).withVarargs(false);
-                        return handle.asSpreader(Object[].class, c.getParameterCount()).asType(CONSTRUCTOR_TYPE);
-                    } catch (NoSuchMethodException | IllegalAccessException e) {
-                        throw new RuntimeException("Constructor not found for " + clz + " with args " + Arrays.toString(types));
+            this.lazyConstr = () -> {
+                Class<?>[] types = Arrays.stream(rTypes).map(RClass::self).toArray(Class[]::new);
+                return cache(
+                    constructorsCache, clz, types, new String[0], () -> {
+                        try {
+                            Constructor<?> c = clz.getDeclaredConstructor(types);
+                            c.setAccessible(true);
+                            MethodHandle handle = LOOKUP.unreflectConstructor(c).withVarargs(false);
+                            return handle.asSpreader(Object[].class, c.getParameterCount()).asType(CONSTRUCTOR_TYPE);
+                        } catch (NoSuchMethodException | IllegalAccessException e) {
+                            throw new RuntimeException("Constructor not found for " + clz + " with args " + Arrays.toString(types));
+                        }
                     }
-                }
-            );
+                );
+            };
         }
 
         public RInstance newInst(Object... args) {

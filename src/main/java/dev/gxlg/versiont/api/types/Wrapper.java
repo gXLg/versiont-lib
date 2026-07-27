@@ -13,7 +13,7 @@ public abstract class Wrapper<S extends Wrapper<S>> {
     protected Wrapper(DelayedConstructor delayedConstructor) {
         synchronized (lock) {
             Class<?> wrapperClass = this.getClass();
-            R.RClass actualClass = (R.RClass) R.clz(wrapperClass).fld("clazz", R.RClass.class).get();
+            R.RClass actualClass = (R.RClass) R.clz(wrapperClass).fld("clazz", R.clz(R.RClass.class)).get();
 
             __preInitWrapper = this;
             Object instance = delayedConstructor.construct(actualClass);
@@ -32,9 +32,9 @@ public abstract class Wrapper<S extends Wrapper<S>> {
                     break;
                 }
 
-                currentActualClass.inst(instance).fld("__wrapper", currentClass).set(this);
+                currentActualClass.inst(instance).fld("__wrapper", R.clz(currentClass)).set(this);
                 currentClass = currentClass.getSuperclass();
-                currentActualClass = (R.RClass) R.clz(currentClass).fld("clazz", R.RClass.class).get();
+                currentActualClass = (R.RClass) R.clz(currentClass).fld("clazz", R.clz(R.RClass.class)).get();
 
             } while (currentClass != null);
 
@@ -42,8 +42,8 @@ public abstract class Wrapper<S extends Wrapper<S>> {
             if (this instanceof WrapperInterface thisIface) {
                 for (Class<?> iface : wrapperClass.getInterfaces()) {
                     if (WrapperInterface.class.isAssignableFrom(iface)) {
-                        Class<?> ifaceWrapperClass = (Class<?>) R.clz(iface).fld("wrapper", Class.class).get();
-                        Map<WrapperInterface, Wrapper<?>> instances = (Map<WrapperInterface, Wrapper<?>>) R.clz(iface).fld("instances", Map.class).get();
+                        Class<?> ifaceWrapperClass = (Class<?>) R.clz(iface).fld("wrapper", R.clz(Class.class)).get();
+                        Map<WrapperInterface, Wrapper<?>> instances = (Map<WrapperInterface, Wrapper<?>>) R.clz(iface).fld("instances", R.clz(Map.class)).get();
                         instances.put(thisIface, R.wrapperInst((Class<Wrapper<?>>) ifaceWrapperClass, instance));
                     }
                 }
