@@ -16,6 +16,9 @@
   "icon": "assets/versiont/icon.png",
   "environment": "*",
   "entrypoints": {},
+  "languageAdapters": {
+    "versiont+modmenu": "dev.gxlg.versiont.plugins.modmenu.ModMenuAdapter"
+  },
   "mixins": [],
   "depends": {
     "minecraft": ">=1.17",
