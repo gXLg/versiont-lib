@@ -23,6 +23,7 @@ import net.bytebuddy.matcher.ElementMatchers;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
@@ -83,12 +84,12 @@ public class R {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> Function<Object, T[]> arrayWrapper(Function<Object, T> wrapperT) {
-        return obj -> (T[]) Stream.of((Object[]) obj).map(wrapperT).toArray();
+    public static <T> Function<Object, T[]> arrayWrapper(Function<Object, T> wrapperT, Class<T> elementType) {
+        return obj -> (T[]) Stream.of((Object[]) obj).map(wrapperT).toArray(x -> (Object[]) Array.newInstance(elementType, x));
     }
 
-    public static <T> Function<T[], Object> arrayUnwrapper(Function<T, Object> unwrapperT) {
-        return wrap -> Stream.of(wrap).map(unwrapperT).toArray();
+    public static <T> Function<T[], Object> arrayUnwrapper(Function<T, Object> unwrapperT, Class<?> elementType) {
+        return wrap -> Stream.of(wrap).map(unwrapperT).toArray(x -> (Object[]) Array.newInstance(elementType, x));
     }
 
     public static <T, R> Function<T, R> nullSafe(Function<T, R> function) {
